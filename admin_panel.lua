@@ -528,11 +528,12 @@ local function doSearch()
             local s=list[i]
             local code=s.script
             local slug=s.slug
+            local verified=s.verified
             local row=make("Frame",{Size=UDim2.new(1,-4,0,44), BackgroundColor3=BG2, BorderSizePixel=0, LayoutOrder=i}, resScroll)
             make("UICorner",{CornerRadius=UDim.new(0,5)},row)
             make("TextLabel",{Size=UDim2.new(1,-74,1,-6), Position=UDim2.fromOffset(8,3), BackgroundTransparency=1,
                 RichText=true, TextColor3=TXT, Font=Enum.Font.GothamMedium, TextSize=12,
-                Text=tostring(s.title or "Untitled").."\n<font color='#8a8a99'>"..tostring((s.game and s.game.name) or "?").."</font>",
+                Text=(verified and "<font color='#46c878'>✔ </font>" or "")..tostring(s.title or "Untitled").."\n<font color='#8a8a99'>"..tostring((s.game and s.game.name) or "?").."</font>",
                 TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Center,
                 TextTruncate=Enum.TextTruncate.AtEnd}, row)
             local ex=make("TextButton",{Size=UDim2.fromOffset(60,28), Position=UDim2.new(1,-66,0.5,-14),
