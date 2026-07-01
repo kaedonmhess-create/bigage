@@ -208,6 +208,40 @@ slider(mv,"Fly Speed",10,300,50,function(v) flySpeed=v end)
 slider(mv,"Walk Speed",16,350,16,function(v) local _,hum=getHRP(); if hum then hum.WalkSpeed=v end end)
 slider(mv,"Jump Power",50,500,50,function(v) local _,hum=getHRP(); if hum then hum.UseJumpPower=true; hum.JumpPower=v end end)
 
+label(mv,"PLATFORM")
+-- Hover mode: WASD = walk at your own WalkSpeed, E = up, Q = down, idle = hold in place.
+local platformOn, platBV = false, nil
+local function newPlatBV(hrp) return make("BodyVelocity",{Velocity=Vector3.zero, MaxForce=Vector3.one*9e9, P=1250}, hrp) end
+toggle(mv,"Platform Float (E up / Q down)", function(on)
+    if on then
+        local hrp=getHRP(); if not hrp then return end
+        platformOn=true; platBV=newPlatBV(hrp)
+    else
+        platformOn=false
+        if platBV then platBV:Destroy() platBV=nil end
+        local hrp=getHRP(); if hrp then hrp.AssemblyLinearVelocity=Vector3.zero end
+    end
+end)
+track(RunService.RenderStepped:Connect(function()
+    if not platformOn then return end
+    local hrp,hum=getHRP(); if not hrp then return end
+    if not (platBV and platBV.Parent) then platBV=newPlatBV(hrp) end
+    local speed = (hum and hum.WalkSpeed) or 16          -- keep your own speed
+    local cam=Workspace.CurrentCamera
+    local look=cam.CFrame.LookVector;  look=Vector3.new(look.X,0,look.Z);  if look.Magnitude>0 then look=look.Unit end
+    local right=cam.CFrame.RightVector; right=Vector3.new(right.X,0,right.Z); if right.Magnitude>0 then right=right.Unit end
+    local move=Vector3.zero
+    if UIS:IsKeyDown(Enum.KeyCode.W) then move+=look end
+    if UIS:IsKeyDown(Enum.KeyCode.S) then move-=look end
+    if UIS:IsKeyDown(Enum.KeyCode.A) then move-=right end
+    if UIS:IsKeyDown(Enum.KeyCode.D) then move+=right end
+    if move.Magnitude>0 then move=move.Unit*speed end
+    local vy=0
+    if UIS:IsKeyDown(Enum.KeyCode.E) then vy=speed end
+    if UIS:IsKeyDown(Enum.KeyCode.Q) then vy=-speed end
+    platBV.Velocity=Vector3.new(move.X, vy, move.Z)     -- idle -> (0,0,0) = hover in place
+end))
+
 --=====================================================================
 -- 2: PLAYERS  (one-click TP buttons, Refresh at bottom)
 --=====================================================================
