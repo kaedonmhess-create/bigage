@@ -1,6 +1,6 @@
 --=====================================================================
 --  ADMIN PANEL  (executor GUI)  — portable, paste into any executor
---  Sections: Movement | Players | Trolling | Teleport | Misc
+--  Tabs: Movement | Players | Aimbot | Trolling | Teleport | Misc | Scripts
 --=====================================================================
 local Players       = game:GetService("Players")
 local RunService    = game:GetService("RunService")
@@ -479,56 +479,9 @@ button(sc,"Load Infinite Yield", function()
 end)
 
 label(sc,"REMOTE SPY")
-_G.__SPY = _G.__SPY or { on=false, cb=nil, installed=false }
--- install the __namecall hook once per session; the hook only acts when _G.__SPY.on
-if not _G.__SPY.installed and hookmetamethod and getnamecallmethod then
-    local ok = pcall(function()
-        local old
-        old = hookmetamethod(game, "__namecall", function(self, ...)
-            local SP = _G.__SPY
-            if SP.on and not (checkcaller and checkcaller()) then
-                local m = getnamecallmethod()
-                if m == "FireServer" or m == "InvokeServer" then
-                    local parts = {}
-                    for i = 1, select("#", ...) do
-                        local v = select(i, ...)
-                        local s = typeof(v)..":"..tostring(v)
-                        if #s > 40 then s = s:sub(1,40).."…" end
-                        parts[i] = s
-                    end
-                    local line = ("[%s] %s(%s)"):format(m, self:GetFullName(), table.concat(parts, ", "))
-                    print("[RemoteSpy] "..line)
-                    if SP.cb then pcall(SP.cb, line) end
-                end
-            end
-            return old(self, ...)
-        end)
-    end)
-    _G.__SPY.installed = ok
-end
-local spyToggle = toggle(sc,"Remote Spy (log fired remotes)", function(on) _G.__SPY.on = on end)
-if not _G.__SPY.installed then spyToggle.Text = "  Remote Spy (unsupported here)" end
-
-local logFrame = make("Frame",{Size=UDim2.new(1,0,0,150), BackgroundColor3=BG, BorderSizePixel=0}, sc)
-make("UICorner",{CornerRadius=UDim.new(0,6)},logFrame)
-local logScroll = make("ScrollingFrame",{Size=UDim2.new(1,-8,1,-8), Position=UDim2.fromOffset(4,4),
-    BackgroundTransparency=1, BorderSizePixel=0, ScrollBarThickness=4, CanvasSize=UDim2.new(),
-    AutomaticCanvasSize=Enum.AutomaticSize.Y, ScrollBarImageColor3=ACCENT}, logFrame)
-make("UIListLayout",{Padding=UDim.new(0,2), SortOrder=Enum.SortOrder.LayoutOrder},logScroll)
-local logOrder = 0
-local function appendLog(line)
-    logOrder += 1
-    make("TextLabel",{LayoutOrder=logOrder, Size=UDim2.new(1,-4,0,0), AutomaticSize=Enum.AutomaticSize.Y,
-        BackgroundTransparency=1, Text=line, TextColor3=TXT, Font=Enum.Font.Code, TextSize=11,
-        TextXAlignment=Enum.TextXAlignment.Left, TextWrapped=true}, logScroll)
-    local kids = {}
-    for _,c in ipairs(logScroll:GetChildren()) do if c:IsA("TextLabel") then table.insert(kids, c) end end
-    if #kids > 60 then kids[1]:Destroy() end
-    task.defer(function() logScroll.CanvasPosition = Vector2.new(0, logScroll.AbsoluteCanvasSize.Y) end)
-end
-_G.__SPY.cb = appendLog
-button(sc,"Clear Log", function()
-    for _,c in ipairs(logScroll:GetChildren()) do if c:IsA("TextLabel") then c:Destroy() end end
+-- Loads SimpleSpy (full remote spy GUI) just like the IY loader above.
+button(sc,"Load Remote Spy", function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/exxtremestuffs/SimpleSpySource/master/SimpleSpy.lua"))()
 end)
 
 -- ---- open first tab & respawn handling ------------------------------
