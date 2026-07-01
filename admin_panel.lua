@@ -484,6 +484,77 @@ button(sc,"Load Remote Spy", function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/exxtremestuffs/SimpleSpySource/master/SimpleSpy.lua"))()
 end)
 
+label(sc,"SCRIPT SEARCH")
+-- Search ScriptBlox by game name; each result has an Execute button that runs the script.
+local HttpService = game:GetService("HttpService")
+local searchRow = make("Frame",{Size=UDim2.new(1,0,0,32), BackgroundColor3=BG, BorderSizePixel=0}, sc)
+make("UICorner",{CornerRadius=UDim.new(0,6)},searchRow)
+local box = make("TextBox",{Size=UDim2.new(1,-72,1,-6), Position=UDim2.fromOffset(6,3), BackgroundColor3=BG2,
+    Text="", PlaceholderText="search a game…", TextColor3=TXT, PlaceholderColor3=SUB, ClearTextOnFocus=false,
+    Font=Enum.Font.GothamMedium, TextSize=13, TextXAlignment=Enum.TextXAlignment.Left}, searchRow)
+make("UICorner",{CornerRadius=UDim.new(0,5)},box)
+make("UIPadding",{PaddingLeft=UDim.new(0,8)},box)
+local searchBtn = make("TextButton",{Size=UDim2.fromOffset(60,26), Position=UDim2.new(1,-64,0.5,-13),
+    BackgroundColor3=ACCENT, Text="Search", TextColor3=TXT, Font=Enum.Font.GothamMedium, TextSize=12, AutoButtonColor=true}, searchRow)
+make("UICorner",{CornerRadius=UDim.new(0,5)},searchBtn)
+local resFrame = make("Frame",{Size=UDim2.new(1,0,0,190), BackgroundColor3=BG, BorderSizePixel=0}, sc)
+make("UICorner",{CornerRadius=UDim.new(0,6)},resFrame)
+local resScroll = make("ScrollingFrame",{Size=UDim2.new(1,-8,1,-8), Position=UDim2.fromOffset(4,4),
+    BackgroundTransparency=1, BorderSizePixel=0, ScrollBarThickness=4, CanvasSize=UDim2.new(),
+    AutomaticCanvasSize=Enum.AutomaticSize.Y, ScrollBarImageColor3=ACCENT}, resFrame)
+make("UIListLayout",{Padding=UDim.new(0,4), SortOrder=Enum.SortOrder.LayoutOrder},resScroll)
+local function clearRes() for _,c in ipairs(resScroll:GetChildren()) do if not c:IsA("UIListLayout") then c:Destroy() end end end
+local function status(t) clearRes(); make("TextLabel",{Size=UDim2.new(1,0,0,20), BackgroundTransparency=1, Text=t,
+    TextColor3=SUB, Font=Enum.Font.Gotham, TextSize=12, TextXAlignment=Enum.TextXAlignment.Left}, resScroll) end
+local function runCode(code)
+    if type(code)~="string" or #code==0 then return false end
+    local fn = loadstring(code); if not fn then return false end
+    task.spawn(fn); return true
+end
+local searching=false
+local function doSearch()
+    local q=box.Text
+    if #q==0 or searching then return end
+    searching=true; status("Searching…")
+    task.spawn(function()
+        local url="https://scriptblox.com/api/script/search?q="..HttpService:UrlEncode(q)  -- no mode filter = any script
+        local ok,body=pcall(function() return game:HttpGet(url) end)
+        local ok2,data = ok and pcall(function() return HttpService:JSONDecode(body) end)
+        local list = ok2 and data and data.result and data.result.scripts
+        if not list then status("Request failed / no results"); searching=false; return end
+        if #list==0 then status("No scripts found for '"..q.."'"); searching=false; return end
+        clearRes()
+        for i=1,math.min(#list,25) do
+            local s=list[i]
+            local code=s.script
+            local slug=s.slug
+            local row=make("Frame",{Size=UDim2.new(1,-4,0,44), BackgroundColor3=BG2, BorderSizePixel=0, LayoutOrder=i}, resScroll)
+            make("UICorner",{CornerRadius=UDim.new(0,5)},row)
+            make("TextLabel",{Size=UDim2.new(1,-74,1,-6), Position=UDim2.fromOffset(8,3), BackgroundTransparency=1,
+                RichText=true, TextColor3=TXT, Font=Enum.Font.GothamMedium, TextSize=12,
+                Text=tostring(s.title or "Untitled").."\n<font color='#8a8a99'>"..tostring((s.game and s.game.name) or "?").."</font>",
+                TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Center,
+                TextTruncate=Enum.TextTruncate.AtEnd}, row)
+            local ex=make("TextButton",{Size=UDim2.fromOffset(60,28), Position=UDim2.new(1,-66,0.5,-14),
+                BackgroundColor3=ACCENT, Text="Execute", TextColor3=TXT, Font=Enum.Font.GothamMedium, TextSize=11, AutoButtonColor=true}, row)
+            make("UICorner",{CornerRadius=UDim.new(0,5)},ex)
+            ex.MouseButton1Click:Connect(function()
+                local c=code
+                if (type(c)~="string" or #c==0) and slug then
+                    local ok3,b2=pcall(function() return game:HttpGet("https://scriptblox.com/api/script/"..slug) end)
+                    if ok3 then local ok4,d2=pcall(function() return HttpService:JSONDecode(b2) end)
+                        if ok4 and d2 and d2.script then c=(type(d2.script)=="table" and d2.script.script) or d2.script end end
+                end
+                ex.Text = runCode(c) and "Ran" or "Failed"
+                task.delay(1.2,function() if ex and ex.Parent then ex.Text="Execute" end end)
+            end)
+        end
+        searching=false
+    end)
+end
+searchBtn.MouseButton1Click:Connect(doSearch)
+box.FocusLost:Connect(function(enter) if enter then doSearch() end end)
+
 -- ---- open first tab & respawn handling ------------------------------
 tabBtns["Movement"].BackgroundColor3=ACCENT
 tabBtns["Movement"].TextColor3=TXT
