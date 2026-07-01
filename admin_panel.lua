@@ -1,564 +1,399 @@
 --=====================================================================
---  ADMIN PANEL  (executor GUI)  — portable, paste into any executor
---  Tabs: Movement | Players | Aimbot | Trolling | Teleport | Misc | Scripts
+--  HYPERION PANEL  (executor GUI) — card layout, paste into any executor
+--  Toggle panel with RIGHT-CONTROL.
 --=====================================================================
-local Players       = game:GetService("Players")
-local RunService    = game:GetService("RunService")
-local UIS           = game:GetService("UserInputService")
-local Workspace     = game:GetService("Workspace")
-local Lighting      = game:GetService("Lighting")
-local LocalPlayer   = Players.LocalPlayer
+local Players=game:GetService("Players")
+local RunService=game:GetService("RunService")
+local UIS=game:GetService("UserInputService")
+local Workspace=game:GetService("Workspace")
+local Lighting=game:GetService("Lighting")
+local HttpService=game:GetService("HttpService")
+local TP=game:GetService("TeleportService")
+local LP=Players.LocalPlayer
 
--- ---- teardown any previous instance ---------------------------------
 if _G.__ADMIN then
     pcall(function() _G.__ADMIN.gui:Destroy() end)
     pcall(function() if _G.__ADMIN.hud then _G.__ADMIN.hud:Destroy() end end)
+    pcall(function() if _G.__ADMIN.esp then _G.__ADMIN.esp:Destroy() end end)
+    pcall(function() for _,d in ipairs(_G.__ADMIN.draw or {}) do pcall(function() d:Remove() end) end end)
     for _,c in ipairs(_G.__ADMIN.conns) do pcall(function() c:Disconnect() end) end
 end
-local STATE = { conns = {} }
-_G.__ADMIN = STATE
-local function track(c) table.insert(STATE.conns, c); return c end
+local STATE={conns={}, draw={}}
+_G.__ADMIN=STATE
+local function track(c) table.insert(STATE.conns,c) return c end
+local function getHRP() local ch=LP.Character return ch and ch:FindFirstChild("HumanoidRootPart"), ch and ch:FindFirstChildOfClass("Humanoid") end
+local function make(cl,pr,pa) local o=Instance.new(cl) for k,v in pairs(pr) do o[k]=v end if pa then o.Parent=pa end return o end
 
--- ---- helpers --------------------------------------------------------
-local function getHRP()
-    local ch = LocalPlayer.Character
-    return ch and ch:FindFirstChild("HumanoidRootPart"), ch and ch:FindFirstChildOfClass("Humanoid")
-end
-local function make(class, props, parent)
-    local o = Instance.new(class)
-    for k,v in pairs(props) do o[k] = v end
-    if parent then o.Parent = parent end
-    return o
-end
+local PANEL=Color3.fromRGB(18,18,22)
+local CARD=Color3.fromRGB(28,29,35)
+local ROW=Color3.fromRGB(38,40,48)
+local ACCENT=Color3.fromRGB(82,140,255)
+local OFF=Color3.fromRGB(58,60,68)
+local TXT=Color3.fromRGB(236,237,242)
+local SUB=Color3.fromRGB(140,143,153)
+local WHITE=Color3.fromRGB(245,246,250)
 
--- palette
-local BG,BG2,ACCENT = Color3.fromRGB(24,24,30),Color3.fromRGB(32,32,40),Color3.fromRGB(120,90,255)
-local ONCOL,TXT,SUB = Color3.fromRGB(70,200,120),Color3.fromRGB(235,235,240),Color3.fromRGB(150,150,165)
-local OFFCOL = Color3.fromRGB(90,90,100)
-
--- ---- root gui -------------------------------------------------------
-local gui = make("ScreenGui", {Name="AdminPanel", ResetOnSpawn=false, ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
-STATE.gui = gui
-local parentGui = (gethui and gethui()) or game:GetService("CoreGui")
+local parentGui=(gethui and gethui()) or game:GetService("CoreGui")
+local gui=make("ScreenGui",{Name="Panel", ResetOnSpawn=false, ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
+STATE.gui=gui
 pcall(function() if syn and syn.protect_gui then syn.protect_gui(gui) end end)
-gui.Parent = parentGui
+gui.Parent=parentGui
 
-local main = make("Frame", {Size=UDim2.fromOffset(560,360), Position=UDim2.fromScale(0.5,0.5),
-    AnchorPoint=Vector2.new(0.5,0.5), BackgroundColor3=BG, BorderSizePixel=0}, gui)
-make("UICorner",{CornerRadius=UDim.new(0,10)},main)
-
--- title bar (draggable)
-local bar = make("Frame",{Size=UDim2.new(1,0,0,38), BackgroundColor3=BG2, BorderSizePixel=0}, main)
-make("UICorner",{CornerRadius=UDim.new(0,10)},bar)
-make("TextLabel",{Size=UDim2.new(1,-20,1,0), Position=UDim2.fromOffset(14,0), BackgroundTransparency=1,
-    Font=Enum.Font.GothamBold, Text="ADMIN PANEL", TextColor3=TXT, TextSize=15, TextXAlignment=Enum.TextXAlignment.Left}, bar)
-do
-    local dragging, ds, sp
-    track(bar.InputBegan:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=true; ds=i.Position; sp=main.Position end
-    end))
-    track(UIS.InputChanged:Connect(function(i)
-        if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
-            local d=i.Position-ds; main.Position=UDim2.new(sp.X.Scale,sp.X.Offset+d.X, sp.Y.Scale,sp.Y.Offset+d.Y) end
-    end))
-    track(UIS.InputEnded:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=false end
-    end))
-end
-
--- close / minimize
-local minimized=false
-local body
-local closeBtn = make("TextButton",{Size=UDim2.fromOffset(28,28), Position=UDim2.new(1,-34,0,5),
-    BackgroundColor3=Color3.fromRGB(200,70,70), Text="X", TextColor3=TXT, Font=Enum.Font.GothamBold, TextSize=14}, bar)
-make("UICorner",{CornerRadius=UDim.new(0,6)},closeBtn)
-closeBtn.MouseButton1Click:Connect(function() gui.Enabled=false end)
-local minBtn = make("TextButton",{Size=UDim2.fromOffset(28,28), Position=UDim2.new(1,-66,0,5),
-    BackgroundColor3=BG, Text="_", TextColor3=TXT, Font=Enum.Font.GothamBold, TextSize=14}, bar)
-make("UICorner",{CornerRadius=UDim.new(0,6)},minBtn)
-minBtn.MouseButton1Click:Connect(function()
-    minimized=not minimized; body.Visible=not minimized
-    main.Size = minimized and UDim2.fromOffset(560,38) or UDim2.fromOffset(560,360)
-end)
-
-body = make("Frame",{Size=UDim2.new(1,0,1,-38), Position=UDim2.fromOffset(0,38), BackgroundTransparency=1}, main)
-local side = make("Frame",{Size=UDim2.new(0,140,1,-12), Position=UDim2.fromOffset(8,6), BackgroundColor3=BG2, BorderSizePixel=0}, body)
-make("UICorner",{CornerRadius=UDim.new(0,8)},side)
-make("UIListLayout",{Padding=UDim.new(0,4), SortOrder=Enum.SortOrder.LayoutOrder, HorizontalAlignment=Enum.HorizontalAlignment.Center},side)
-make("UIPadding",{PaddingTop=UDim.new(0,8)},side)
-local content = make("Frame",{Size=UDim2.new(1,-164,1,-12), Position=UDim2.fromOffset(156,6), BackgroundColor3=BG2, BorderSizePixel=0}, body)
-make("UICorner",{CornerRadius=UDim.new(0,8)},content)
-
--- ---- tab / widget builders -----------------------------------------
-local pages, tabBtns = {}, {}
-local function newPage(name)
-    local p = make("ScrollingFrame",{Name=name, Size=UDim2.new(1,-12,1,-12), Position=UDim2.fromOffset(6,6),
-        BackgroundTransparency=1, BorderSizePixel=0, Visible=false, ScrollBarThickness=4,
-        CanvasSize=UDim2.new(), AutomaticCanvasSize=Enum.AutomaticSize.Y, ScrollBarImageColor3=ACCENT}, content)
-    make("UIListLayout",{Padding=UDim.new(0,6), SortOrder=Enum.SortOrder.LayoutOrder},p)
-    pages[name]=p
-    local b = make("TextButton",{Size=UDim2.new(1,-12,0,32), BackgroundColor3=BG, Text=name,
-        TextColor3=SUB, Font=Enum.Font.GothamMedium, TextSize=13, AutoButtonColor=false}, side)
-    make("UICorner",{CornerRadius=UDim.new(0,6)},b)
-    tabBtns[name]=b
-    b.MouseButton1Click:Connect(function()
-        for n,pg in pairs(pages) do pg.Visible=(n==name) end
-        for n,bb in pairs(tabBtns) do bb.BackgroundColor3=(n==name) and ACCENT or BG; bb.TextColor3=(n==name) and TXT or SUB end
-    end)
-    return p
-end
-local function label(parent, text, order)
-    return make("TextLabel",{LayoutOrder=order or 0, Size=UDim2.new(1,0,0,18), BackgroundTransparency=1, Text=text,
-        TextColor3=SUB, Font=Enum.Font.GothamMedium, TextSize=12, TextXAlignment=Enum.TextXAlignment.Left}, parent)
-end
-local function button(parent, text, cb, order)
-    local b = make("TextButton",{LayoutOrder=order or 0, Size=UDim2.new(1,0,0,32), BackgroundColor3=BG, Text=text,
-        TextColor3=TXT, Font=Enum.Font.GothamMedium, TextSize=13, AutoButtonColor=true}, parent)
-    make("UICorner",{CornerRadius=UDim.new(0,6)},b)
-    b.MouseButton1Click:Connect(function() pcall(cb) end); return b
-end
-local function toggle(parent, text, cb, order)
-    local on=false
-    local b = make("TextButton",{LayoutOrder=order or 0, Size=UDim2.new(1,0,0,32), BackgroundColor3=BG, Text="  "..text,
-        TextColor3=TXT, Font=Enum.Font.GothamMedium, TextSize=13, TextXAlignment=Enum.TextXAlignment.Left, AutoButtonColor=true}, parent)
-    make("UICorner",{CornerRadius=UDim.new(0,6)},b)
-    local dot = make("Frame",{Size=UDim2.fromOffset(16,16), Position=UDim2.new(1,-26,0.5,-8), BackgroundColor3=OFFCOL}, b)
-    make("UICorner",{CornerRadius=UDim.new(1,0)},dot)
-    b.MouseButton1Click:Connect(function() on=not on; dot.BackgroundColor3=on and ONCOL or OFFCOL; pcall(cb, on) end)
-    return b
-end
-local function slider(parent, text, minv, maxv, default, cb)
-    local holder = make("Frame",{Size=UDim2.new(1,0,0,44), BackgroundColor3=BG, BorderSizePixel=0}, parent)
-    make("UICorner",{CornerRadius=UDim.new(0,6)},holder)
-    local lbl = make("TextLabel",{Size=UDim2.new(1,-12,0,20), Position=UDim2.fromOffset(8,2), BackgroundTransparency=1,
-        Text=text.."  ["..default.."]", TextColor3=TXT, Font=Enum.Font.GothamMedium, TextSize=12, TextXAlignment=Enum.TextXAlignment.Left}, holder)
-    local track_ = make("Frame",{Size=UDim2.new(1,-16,0,6), Position=UDim2.fromOffset(8,28), BackgroundColor3=Color3.fromRGB(60,60,70), BorderSizePixel=0}, holder)
-    make("UICorner",{CornerRadius=UDim.new(1,0)},track_)
-    local fill = make("Frame",{Size=UDim2.fromScale((default-minv)/(maxv-minv),1), BackgroundColor3=ACCENT, BorderSizePixel=0}, track_)
-    make("UICorner",{CornerRadius=UDim.new(1,0)},fill)
-    local dragging=false
-    local function set(x)
-        local rel=math.clamp((x-track_.AbsolutePosition.X)/track_.AbsoluteSize.X,0,1)
-        local val=math.floor(minv+(maxv-minv)*rel+0.5)
-        fill.Size=UDim2.fromScale(rel,1); lbl.Text=text.."  ["..val.."]"; pcall(cb,val)
-    end
-    track(track_.InputBegan:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=true; set(i.Position.X) end
-    end))
-    track(UIS.InputChanged:Connect(function(i)
-        if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then set(i.Position.X) end
-    end))
-    track(UIS.InputEnded:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=false end
-    end))
-end
-
---=====================================================================
--- 1: MOVEMENT  (Flight, Noclip, speed sliders)
---=====================================================================
-local mv = newPage("Movement")
-label(mv,"FLIGHT & CLIP")
-local flySpeed, flying, flyBV, flyBG = 50, false, nil, nil
-local function killMomentum()
-    local hrp=getHRP()
-    if hrp then hrp.AssemblyLinearVelocity=Vector3.zero; hrp.AssemblyAngularVelocity=Vector3.zero end
-end
-local function stopFly()
-    flying=false
-    if flyBV then flyBV:Destroy() flyBV=nil end
-    if flyBG then flyBG:Destroy() flyBG=nil end
-    local _,hum=getHRP(); if hum then hum.PlatformStand=false end
-    killMomentum(); task.defer(killMomentum)     -- no coasting when disabled
-end
-local function startFly()
-    local hrp,hum=getHRP(); if not hrp then return end
-    flying=true
-    if hum then hum.PlatformStand=true end
-    flyBV=make("BodyVelocity",{Velocity=Vector3.zero, MaxForce=Vector3.one*9e9, P=1250},hrp)
-    flyBG=make("BodyGyro",{MaxTorque=Vector3.one*9e9, P=1000, CFrame=hrp.CFrame},hrp)
-end
-toggle(mv,"Flight", function(on) if on then startFly() else stopFly() end end)
-track(RunService.RenderStepped:Connect(function()
-    if flying and flyBV and flyBV.Parent and flyBG and flyBG.Parent then
-        local cam=Workspace.CurrentCamera
-        local dir=Vector3.zero
-        if UIS:IsKeyDown(Enum.KeyCode.W) then dir+=cam.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then dir-=cam.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then dir-=cam.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then dir+=cam.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then dir+=Vector3.new(0,1,0) end
-        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then dir-=Vector3.new(0,1,0) end
-        if dir.Magnitude>0 then dir=dir.Unit end
-        flyBV.Velocity=dir*flySpeed; flyBG.CFrame=cam.CFrame
-    elseif flying and not (flyBV and flyBV.Parent) then
-        startFly()                                -- rebuild if a body got stripped
-    end
-end))
-local noclip=false
-toggle(mv,"Noclip", function(on) noclip=on end)
-track(RunService.Stepped:Connect(function()
-    if noclip and LocalPlayer.Character then
-        for _,p in ipairs(LocalPlayer.Character:GetDescendants()) do
-            if p:IsA("BasePart") and p.CanCollide then p.CanCollide=false end
-        end
-    end
-end))
-label(mv,"SPEEDS")
-slider(mv,"Fly Speed",10,300,50,function(v) flySpeed=v end)
-slider(mv,"Walk Speed",16,350,16,function(v) local _,hum=getHRP(); if hum then hum.WalkSpeed=v end end)
-slider(mv,"Jump Power",50,500,50,function(v) local _,hum=getHRP(); if hum then hum.UseJumpPower=true; hum.JumpPower=v end end)
-
-label(mv,"PLATFORM")
--- Hover mode: WASD = walk at your own WalkSpeed, E = up, Q = down, idle = hold in place.
-local platformOn, platBV = false, nil
-local function newPlatBV(hrp) return make("BodyVelocity",{Velocity=Vector3.zero, MaxForce=Vector3.one*9e9, P=1250}, hrp) end
-toggle(mv,"Platform Float (E up / Q down)", function(on)
-    if on then
-        local hrp=getHRP(); if not hrp then return end
-        platformOn=true; platBV=newPlatBV(hrp)
-    else
-        platformOn=false
-        if platBV then platBV:Destroy() platBV=nil end
-        local hrp=getHRP(); if hrp then hrp.AssemblyLinearVelocity=Vector3.zero end
-    end
-end)
-track(RunService.RenderStepped:Connect(function()
-    if not platformOn then return end
-    local hrp,hum=getHRP(); if not hrp then return end
-    if not (platBV and platBV.Parent) then platBV=newPlatBV(hrp) end
-    local speed = (hum and hum.WalkSpeed) or 16          -- keep your own speed
-    local cam=Workspace.CurrentCamera
-    local look=cam.CFrame.LookVector;  look=Vector3.new(look.X,0,look.Z);  if look.Magnitude>0 then look=look.Unit end
-    local right=cam.CFrame.RightVector; right=Vector3.new(right.X,0,right.Z); if right.Magnitude>0 then right=right.Unit end
-    local move=Vector3.zero
-    if UIS:IsKeyDown(Enum.KeyCode.W) then move+=look end
-    if UIS:IsKeyDown(Enum.KeyCode.S) then move-=look end
-    if UIS:IsKeyDown(Enum.KeyCode.A) then move-=right end
-    if UIS:IsKeyDown(Enum.KeyCode.D) then move+=right end
-    if move.Magnitude>0 then move=move.Unit*speed end
-    local vy=0
-    if UIS:IsKeyDown(Enum.KeyCode.E) then vy=speed end
-    if UIS:IsKeyDown(Enum.KeyCode.Q) then vy=-speed end
-    platBV.Velocity=Vector3.new(move.X, vy, move.Z)     -- idle -> (0,0,0) = hover in place
-end))
-
---=====================================================================
--- 2: PLAYERS  (one-click TP buttons, Refresh at bottom)
---=====================================================================
-local pl = newPage("Players")
-label(pl,"CLICK A PLAYER TO TELEPORT", 1)
-local listFrame = make("Frame",{LayoutOrder=2, Size=UDim2.new(1,0,0,200), BackgroundColor3=BG, BorderSizePixel=0}, pl)
-make("UICorner",{CornerRadius=UDim.new(0,6)},listFrame)
-local listScroll = make("ScrollingFrame",{Size=UDim2.new(1,-8,1,-8), Position=UDim2.fromOffset(4,4),
-    BackgroundTransparency=1, BorderSizePixel=0, ScrollBarThickness=4, CanvasSize=UDim2.new(),
-    AutomaticCanvasSize=Enum.AutomaticSize.Y, ScrollBarImageColor3=ACCENT}, listFrame)
-make("UIListLayout",{Padding=UDim.new(0,3), SortOrder=Enum.SortOrder.Name},listScroll)
-local function tpTo(target)
-    local hrp=getHRP()
-    local thrp=target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-    if hrp and thrp then hrp.CFrame=thrp.CFrame+Vector3.new(0,3,0) end
-end
-local function refreshPlayers()
-    for _,c in ipairs(listScroll:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
-    for _,plr in ipairs(Players:GetPlayers()) do
-        if plr~=LocalPlayer then
-            local row = make("TextButton",{Name=plr.Name, Size=UDim2.new(1,0,0,28), BackgroundColor3=BG2,
-                Text="  TP » "..plr.DisplayName.." (@"..plr.Name..")", TextColor3=TXT, Font=Enum.Font.GothamMedium,
-                TextSize=12, TextXAlignment=Enum.TextXAlignment.Left, AutoButtonColor=true}, listScroll)
-            make("UICorner",{CornerRadius=UDim.new(0,5)},row)
-            row.MouseButton1Click:Connect(function()
-                tpTo(plr)
-                row.BackgroundColor3=ACCENT
-                task.delay(0.15,function() if row and row.Parent then row.BackgroundColor3=BG2 end end)
-            end)
-        end
-    end
-end
-button(pl,"Refresh Players", refreshPlayers, 3)   -- LayoutOrder 3 keeps it at the bottom
-refreshPlayers()
-track(Players.PlayerAdded:Connect(refreshPlayers))
-track(Players.PlayerRemoving:Connect(function() task.defer(refreshPlayers) end))
-
---=====================================================================
--- 3: AIMBOT  (locks camera to the player nearest your mouse)
---=====================================================================
-local ab = newPage("Aimbot")
-local aim = { enabled=false, always=false, part="Head", smooth=8, fov=120,
-              team=false, wall=false, sticky=false, showFOV=true }
-local aiming, curTarget = false, nil
-
--- FOV circle HUD (own ScreenGui so it aligns with the real cursor)
-local hud = make("ScreenGui",{Name="AimHUD", IgnoreGuiInset=true, ResetOnSpawn=false, ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, parentGui)
+-- HUD (fov circle + crosshair), separate inset-ignoring layer
+local hud=make("ScreenGui",{Name="HUD", IgnoreGuiInset=true, ResetOnSpawn=false, ZIndexBehavior=Enum.ZIndexBehavior.Sibling},parentGui)
+STATE.hud=hud
 pcall(function() if syn and syn.protect_gui then syn.protect_gui(hud) end end)
-STATE.hud = hud
-local fovCircle = make("Frame",{Size=UDim2.fromOffset(aim.fov*2,aim.fov*2), AnchorPoint=Vector2.new(0.5,0.5),
-    BackgroundTransparency=1, Visible=false}, hud)
+local fovCircle=make("Frame",{Size=UDim2.fromOffset(240,240), AnchorPoint=Vector2.new(0.5,0.5), BackgroundTransparency=1, Visible=false},hud)
 make("UICorner",{CornerRadius=UDim.new(1,0)},fovCircle)
 make("UIStroke",{Thickness=1.5, Color=ACCENT, Transparency=0.15},fovCircle)
+local cross=make("Frame",{Size=UDim2.fromOffset(14,14), Position=UDim2.fromScale(0.5,0.5), AnchorPoint=Vector2.new(0.5,0.5), BackgroundTransparency=1, Visible=false},hud)
+make("Frame",{Size=UDim2.fromOffset(2,14), Position=UDim2.fromScale(0.5,0.5), AnchorPoint=Vector2.new(0.5,0.5), BackgroundColor3=WHITE, BorderSizePixel=0},cross)
+make("Frame",{Size=UDim2.fromOffset(14,2), Position=UDim2.fromScale(0.5,0.5), AnchorPoint=Vector2.new(0.5,0.5), BackgroundColor3=WHITE, BorderSizePixel=0},cross)
 
-label(ab,"AIMBOT")
-toggle(ab,"Enable (hold Right-Click)", function(on) aim.enabled=on; if not on then curTarget=nil end end)
-toggle(ab,"Always Aim (no key)", function(on) aim.always=on end)
-local parts = {"Head","HumanoidRootPart","UpperTorso"}
-local pi = 1
-local partBtn
-partBtn = button(ab,"Target Part: Head", function()
-    pi = pi % #parts + 1; aim.part = parts[pi]; partBtn.Text = "Target Part: "..aim.part
-end)
-toggle(ab,"Team Check", function(on) aim.team=on end)
-toggle(ab,"Wall Check (visible only)", function(on) aim.wall=on end)
-toggle(ab,"Sticky Lock (keep target)", function(on) aim.sticky=on end)
-toggle(ab,"Show FOV Circle", function(on) aim.showFOV=on end)
-label(ab,"SETTINGS")
-slider(ab,"Smoothness",1,25,8,function(v) aim.smooth=v end)
-slider(ab,"FOV",40,400,120,function(v) aim.fov=v end)
-local tgtLabel = label(ab,"Target: none")
+local main=make("Frame",{Size=UDim2.fromOffset(900,470), Position=UDim2.fromScale(0.5,0.5), AnchorPoint=Vector2.new(0.5,0.5),
+    BackgroundColor3=PANEL, BorderSizePixel=0},gui)
+make("UICorner",{CornerRadius=UDim.new(0,12)},main)
+make("UIStroke",{Color=Color3.fromRGB(45,47,55), Thickness=1},main)
 
-local function isVisible(part)
-    local cam = Workspace.CurrentCamera
-    local rp = RaycastParams.new()
-    rp.FilterType = Enum.RaycastFilterType.Exclude
-    rp.FilterDescendantsInstances = { LocalPlayer.Character, part.Parent }
-    local hit = Workspace:Raycast(cam.CFrame.Position, part.Position - cam.CFrame.Position, rp)
-    return hit == nil
+local bar=make("Frame",{Size=UDim2.new(1,0,0,36), BackgroundColor3=PANEL, BorderSizePixel=0},main)
+make("UICorner",{CornerRadius=UDim.new(0,12)},bar)
+make("TextLabel",{Size=UDim2.new(1,-100,1,0), Position=UDim2.fromOffset(16,0), BackgroundTransparency=1,
+    Text="◆  HYPERION", TextColor3=TXT, Font=Enum.Font.GothamBold, TextSize=15, TextXAlignment=Enum.TextXAlignment.Left},bar)
+make("TextLabel",{Size=UDim2.fromOffset(120,14), Position=UDim2.new(1,-160,0.5,-7), BackgroundTransparency=1,
+    Text="RightCtrl to toggle", TextColor3=SUB, Font=Enum.Font.Gotham, TextSize=11, TextXAlignment=Enum.TextXAlignment.Right},bar)
+do local drag,ds,sp
+    track(bar.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true; ds=i.Position; sp=main.Position end end))
+    track(UIS.InputChanged:Connect(function(i) if drag and i.UserInputType==Enum.UserInputType.MouseMovement then local d=i.Position-ds; main.Position=UDim2.new(sp.X.Scale,sp.X.Offset+d.X,sp.Y.Scale,sp.Y.Offset+d.Y) end end))
+    track(UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end end))
 end
-local function validTarget(plr)
-    local ch = plr and plr.Character
-    local hum = ch and ch:FindFirstChildOfClass("Humanoid")
-    local part = ch and ch:FindFirstChild(aim.part)
-    if hum and hum.Health > 0 and part then return part, hum end
+local closeB=make("TextButton",{Size=UDim2.fromOffset(26,26), Position=UDim2.new(1,-32,0,5), BackgroundColor3=Color3.fromRGB(200,70,70),
+    Text="✕", TextColor3=WHITE, Font=Enum.Font.GothamBold, TextSize=13},bar)
+make("UICorner",{CornerRadius=UDim.new(0,6)},closeB)
+closeB.MouseButton1Click:Connect(function() gui.Enabled=false end)
+track(UIS.InputBegan:Connect(function(i,gp) if not gp and i.KeyCode==Enum.KeyCode.RightControl then gui.Enabled=not gui.Enabled end end))
+
+local cols=make("Frame",{Size=UDim2.new(1,-16,1,-44), Position=UDim2.fromOffset(8,40), BackgroundTransparency=1},main)
+make("UIListLayout",{FillDirection=Enum.FillDirection.Horizontal, Padding=UDim.new(0,8), SortOrder=Enum.SortOrder.LayoutOrder},cols)
+local function newCol()
+    local c=make("ScrollingFrame",{Size=UDim2.new(0.25,-6,1,0), BackgroundTransparency=1, BorderSizePixel=0,
+        ScrollBarThickness=3, CanvasSize=UDim2.new(), AutomaticCanvasSize=Enum.AutomaticSize.Y, ScrollBarImageColor3=ROW},cols)
+    make("UIListLayout",{Padding=UDim.new(0,8), SortOrder=Enum.SortOrder.LayoutOrder},c)
+    return c
 end
-local function pickTarget()
-    local cam = Workspace.CurrentCamera
-    local m = LocalPlayer:GetMouse()
-    local mp = Vector2.new(m.X, m.Y)
-    local best, bestD = nil, aim.fov
+local function card(col,title)
+    local c=make("Frame",{Size=UDim2.new(1,0,0,0), AutomaticSize=Enum.AutomaticSize.Y, BackgroundColor3=CARD, BorderSizePixel=0},col)
+    make("UICorner",{CornerRadius=UDim.new(0,10)},c)
+    make("UIListLayout",{Padding=UDim.new(0,7), SortOrder=Enum.SortOrder.LayoutOrder},c)
+    make("UIPadding",{PaddingTop=UDim.new(0,11), PaddingBottom=UDim.new(0,12), PaddingLeft=UDim.new(0,12), PaddingRight=UDim.new(0,12)},c)
+    make("TextLabel",{Size=UDim2.new(1,0,0,14), BackgroundTransparency=1, Text=title:upper(), TextColor3=SUB,
+        Font=Enum.Font.GothamBold, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left},c)
+    return c
+end
+local function pill(parent,text,default,cb)
+    local st=default and true or false
+    local b=make("TextButton",{Size=UDim2.new(1,0,0,26), BackgroundTransparency=1, Text="", AutoButtonColor=false},parent)
+    make("TextLabel",{Size=UDim2.new(1,-46,1,0), BackgroundTransparency=1, Text=text, TextColor3=TXT, Font=Enum.Font.Gotham, TextSize=13, TextXAlignment=Enum.TextXAlignment.Left},b)
+    local tr=make("Frame",{Size=UDim2.fromOffset(38,20), Position=UDim2.new(1,-38,0.5,-10), BackgroundColor3=st and ACCENT or OFF},b)
+    make("UICorner",{CornerRadius=UDim.new(1,0)},tr)
+    local knob=make("Frame",{Size=UDim2.fromOffset(16,16), Position=st and UDim2.new(1,-18,0.5,-8) or UDim2.new(0,2,0.5,-8), BackgroundColor3=WHITE},tr)
+    make("UICorner",{CornerRadius=UDim.new(1,0)},knob)
+    b.MouseButton1Click:Connect(function()
+        st=not st
+        tr.BackgroundColor3=st and ACCENT or OFF
+        knob:TweenPosition(st and UDim2.new(1,-18,0.5,-8) or UDim2.new(0,2,0.5,-8), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.12, true)
+        pcall(cb,st)
+    end)
+    if default then pcall(cb,true) end
+    return b
+end
+local function sldr(parent,text,mn,mx,def,cb)
+    local h=make("Frame",{Size=UDim2.new(1,0,0,38), BackgroundTransparency=1},parent)
+    make("TextLabel",{Size=UDim2.new(1,-44,0,16), BackgroundTransparency=1, Text=text, TextColor3=TXT, Font=Enum.Font.Gotham, TextSize=13, TextXAlignment=Enum.TextXAlignment.Left},h)
+    local val=make("TextLabel",{Size=UDim2.fromOffset(42,16), Position=UDim2.new(1,-42,0,0), BackgroundTransparency=1, Text=tostring(def), TextColor3=WHITE, Font=Enum.Font.GothamBold, TextSize=13, TextXAlignment=Enum.TextXAlignment.Right},h)
+    local tr=make("Frame",{Size=UDim2.new(1,0,0,5), Position=UDim2.fromOffset(0,26), BackgroundColor3=OFF},h)
+    make("UICorner",{CornerRadius=UDim.new(1,0)},tr)
+    local fill=make("Frame",{Size=UDim2.fromScale((def-mn)/(mx-mn),1), BackgroundColor3=ACCENT},tr)
+    make("UICorner",{CornerRadius=UDim.new(1,0)},fill)
+    local knob=make("Frame",{Size=UDim2.fromOffset(13,13), Position=UDim2.new((def-mn)/(mx-mn),-6,0.5,-6), BackgroundColor3=WHITE},tr)
+    make("UICorner",{CornerRadius=UDim.new(1,0)},knob)
+    -- transparent hit layer on top captures clicks anywhere (fill/knob no longer block them)
+    local hit=make("TextButton",{Size=UDim2.new(1,0,0,22), Position=UDim2.fromOffset(0,18), BackgroundTransparency=1, Text="", AutoButtonColor=false},h)
+    local drag=false
+    local function set(x)
+        local rel=math.clamp((x-tr.AbsolutePosition.X)/tr.AbsoluteSize.X,0,1)
+        local v=math.floor(mn+(mx-mn)*rel+0.5)
+        fill.Size=UDim2.fromScale(rel,1); knob.Position=UDim2.new(rel,-6,0.5,-6); val.Text=tostring(v); pcall(cb,v)
+    end
+    track(hit.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag=true; set(i.Position.X) end end))
+    track(UIS.InputChanged:Connect(function(i) if drag and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then set(i.Position.X) end end))
+    track(UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag=false end end))
+end
+local function listbtn(parent,text,cb)
+    local b=make("TextButton",{Size=UDim2.new(1,0,0,30), BackgroundColor3=ROW, Text=text, TextColor3=TXT, Font=Enum.Font.GothamMedium, TextSize=13, AutoButtonColor=true},parent)
+    make("UICorner",{CornerRadius=UDim.new(0,7)},b)
+    b.MouseButton1Click:Connect(function() pcall(cb) end)
+    return b
+end
+
+-- ================= COLUMN 1: AIMBOT + CAMERA =================
+local c1=newCol()
+local aimc=card(c1,"Aimbot")
+local aim={on=false, hold=true, head=true, team=false, wall=false, sticky=false, fov=120, smooth=5, showfov=true}
+local aiming,curT=false,nil
+pill(aimc,"Aimbot enabled",false,function(v) aim.on=v; if not v then curT=nil end end)
+pill(aimc,"Hold RMB to aim",true,function(v) aim.hold=v end)
+pill(aimc,"Target head",true,function(v) aim.head=v end)
+pill(aimc,"Team check",false,function(v) aim.team=v end)
+pill(aimc,"Wall check",false,function(v) aim.wall=v end)
+pill(aimc,"Sticky target",false,function(v) aim.sticky=v end)
+pill(aimc,"Show FOV circle",true,function(v) aim.showfov=v end)
+sldr(aimc,"Aim FOV",40,400,120,function(v) aim.fov=v end)
+sldr(aimc,"Smoothness",1,25,5,function(v) aim.smooth=v end)
+local camc=card(c1,"Camera")
+sldr(camc,"Field of view",40,120,70,function(v) Workspace.CurrentCamera.FieldOfView=v end)
+local function visible(part)
+    local cam=Workspace.CurrentCamera
+    local rp=RaycastParams.new() rp.FilterType=Enum.RaycastFilterType.Exclude rp.FilterDescendantsInstances={LP.Character, part.Parent}
+    return Workspace:Raycast(cam.CFrame.Position, part.Position-cam.CFrame.Position, rp)==nil
+end
+local function vT(plr)
+    local ch=plr and plr.Character
+    local hum=ch and ch:FindFirstChildOfClass("Humanoid")
+    local part=ch and ch:FindFirstChild(aim.head and "Head" or "HumanoidRootPart")
+    if hum and hum.Health>0 and part then return part end
+end
+local function pick()
+    local cam=Workspace.CurrentCamera
+    local m=LP:GetMouse(); local mp=Vector2.new(m.X,m.Y)
+    local best,bd=nil,aim.fov
     for _,plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and not (aim.team and plr.Team == LocalPlayer.Team) then
-            local part = validTarget(plr)
-            if part then
-                local sp, on = cam:WorldToViewportPoint(part.Position)
-                if on then
-                    local d = (Vector2.new(sp.X, sp.Y) - mp).Magnitude
-                    if d < bestD and (not aim.wall or isVisible(part)) then best, bestD = plr, d end
-                end
-            end
+        if plr~=LP and not (aim.team and plr.Team==LP.Team) then
+            local part=vT(plr)
+            if part then local sp,on=cam:WorldToViewportPoint(part.Position)
+                if on then local d=(Vector2.new(sp.X,sp.Y)-mp).Magnitude if d<bd and (not aim.wall or visible(part)) then best,bd=plr,d end end end
         end
     end
     return best
 end
-
-track(RunService.RenderStepped:Connect(function(dt)
-    -- FOV circle follows the cursor
-    fovCircle.Visible = aim.enabled and aim.showFOV
-    if fovCircle.Visible then
-        fovCircle.Size = UDim2.fromOffset(aim.fov*2, aim.fov*2)
-        local ml = UIS:GetMouseLocation()
-        fovCircle.Position = UDim2.fromOffset(ml.X, ml.Y)
-    end
-    local active = aim.enabled and (aim.always or aiming)
-    if active then
-        if not (aim.sticky and curTarget and validTarget(curTarget)) then curTarget = pickTarget() end
-        local part = curTarget and validTarget(curTarget)
-        if part then
-            tgtLabel.Text = "Target: "..curTarget.Name
-            local cam = Workspace.CurrentCamera
-            local goal = CFrame.lookAt(cam.CFrame.Position, part.Position)
-            local alpha = math.clamp((1/aim.smooth) * (dt*60), 0, 1)
-            cam.CFrame = cam.CFrame:Lerp(goal, alpha)
-        else
-            curTarget = nil; tgtLabel.Text = "Target: none"
-        end
-    else
-        curTarget = nil
-        if tgtLabel.Text ~= "Target: none" then tgtLabel.Text = "Target: none" end
-    end
-end))
 track(UIS.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton2 then aiming=true end end))
 track(UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton2 then aiming=false end end))
-
---=====================================================================
--- 4: TROLLING  (self troll + Push Objects)
---=====================================================================
-local tr = newPage("Trolling")
-label(tr,"SELF TROLL")
-local spinning=false
-toggle(tr,"Spin", function(on) spinning=on end)
-track(RunService.Heartbeat:Connect(function()
-    if spinning then local hrp=getHRP(); if hrp then hrp.CFrame=hrp.CFrame*CFrame.Angles(0,math.rad(30),0) end end
+track(RunService.RenderStepped:Connect(function(dt)
+    fovCircle.Visible=aim.on and aim.showfov
+    if fovCircle.Visible then fovCircle.Size=UDim2.fromOffset(aim.fov*2,aim.fov*2) local ml=UIS:GetMouseLocation() fovCircle.Position=UDim2.fromOffset(ml.X,ml.Y) end
+    if aim.on and (aiming or not aim.hold) then
+        if not (aim.sticky and curT and vT(curT)) then curT=pick() end
+        local part=curT and vT(curT)
+        if part then local cam=Workspace.CurrentCamera
+            cam.CFrame=cam.CFrame:Lerp(CFrame.lookAt(cam.CFrame.Position,part.Position), math.clamp((1/aim.smooth)*(dt*60),0,1))
+        else curT=nil end
+    else curT=nil end
 end))
-button(tr,"Fling Self", function()
-    local hrp=getHRP(); if hrp then hrp.AssemblyLinearVelocity=Vector3.new(math.random(-1,1),1,math.random(-1,1)).Unit*250 end
-end)
-button(tr,"Launch Up", function() local hrp=getHRP(); if hrp then hrp.CFrame=hrp.CFrame+Vector3.new(0,150,0) end end)
-toggle(tr,"Freeze In Place", function(on) local hrp=getHRP(); if hrp then hrp.Anchored=on end end)
 
-label(tr,"PHYSICS")
-local Debris = game:GetService("Debris")
-local pushOn, pushForce = false, 80
-toggle(tr,"Push Objects (walk into them)", function(on) pushOn=on end)
-local pushParams = OverlapParams.new()
-pushParams.FilterType = Enum.RaycastFilterType.Exclude
--- Uses a short-lived BodyVelocity (a physics mover the client simulates) per part,
--- instead of setting AssemblyLinearVelocity directly which the server overrides.
-track(RunService.Heartbeat:Connect(function()
-    if not pushOn then return end
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    local vel = hrp.AssemblyLinearVelocity
-    if Vector3.new(vel.X,0,vel.Z).Magnitude < 1 then return end   -- only while moving
-    pushParams.FilterDescendantsInstances = { char }
-    for _,p in ipairs(Workspace:GetPartBoundsInRadius(hrp.Position, 8, pushParams)) do
-        if p:IsA("BasePart") and not p.Anchored and not p:GetAttribute("__pushing") then
-            local model = p:FindFirstAncestorWhichIsA("Model")
-            if not (model and Players:GetPlayerFromCharacter(model)) then
-                local dir = p.Position - hrp.Position
-                dir = Vector3.new(dir.X, 0, dir.Z)
-                dir = (dir.Magnitude > 0.05) and dir.Unit or hrp.CFrame.LookVector
-                p:SetAttribute("__pushing", true)
-                local bv = Instance.new("BodyVelocity")
-                bv.MaxForce = Vector3.one*1e6
-                bv.Velocity = dir*pushForce + Vector3.new(0, 14, 0)
-                bv.Parent = p
-                Debris:AddItem(bv, 0.35)
-                task.delay(0.4, function() if p and p.Parent then p:SetAttribute("__pushing", nil) end end)
-            end
+-- ================= COLUMN 2: MOVEMENT + COMBAT =================
+local c2=newCol()
+local mvc=card(c2,"Movement")
+local flySpeed,flying,flyBV,flyBG=50,false,nil,nil
+local function stopFly() flying=false if flyBV then flyBV:Destroy() flyBV=nil end if flyBG then flyBG:Destroy() flyBG=nil end local _,h=getHRP() if h then h.PlatformStand=false end local hrp=getHRP() if hrp then hrp.AssemblyLinearVelocity=Vector3.zero end end
+local function startFly() local hrp,h=getHRP() if not hrp then return end flying=true if h then h.PlatformStand=true end flyBV=make("BodyVelocity",{Velocity=Vector3.zero,MaxForce=Vector3.one*9e9,P=1250},hrp) flyBG=make("BodyGyro",{MaxTorque=Vector3.one*9e9,P=1000,CFrame=hrp.CFrame},hrp) end
+pill(mvc,"Fly",false,function(v) if v then startFly() else stopFly() end end)
+track(RunService.RenderStepped:Connect(function()
+    if flying and flyBV and flyBV.Parent and flyBG and flyBG.Parent then
+        local cam=Workspace.CurrentCamera local d=Vector3.zero
+        if UIS:IsKeyDown(Enum.KeyCode.W) then d+=cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then d-=cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then d-=cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then d+=cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then d+=Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then d-=Vector3.new(0,1,0) end
+        if d.Magnitude>0 then d=d.Unit end
+        flyBV.Velocity=d*flySpeed; flyBG.CFrame=cam.CFrame
+    elseif flying then startFly() end
+end))
+local noclip=false
+pill(mvc,"Noclip",false,function(v) noclip=v end)
+track(RunService.Stepped:Connect(function() if noclip and LP.Character then for _,p in ipairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") and p.CanCollide then p.CanCollide=false end end end end))
+local infJump=false
+pill(mvc,"Infinite jump",false,function(v) infJump=v end)
+track(UIS.JumpRequest:Connect(function() if infJump then local _,h=getHRP() if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end end end))
+local platOn,platBV=false,nil
+local function newPlatBV(hrp) return make("BodyVelocity",{Velocity=Vector3.zero,MaxForce=Vector3.one*9e9,P=1250},hrp) end
+pill(mvc,"Platform float (E/Q)",false,function(v)
+    if v then local hrp=getHRP() if not hrp then return end platOn=true platBV=newPlatBV(hrp)
+    else platOn=false if platBV then platBV:Destroy() platBV=nil end local hrp=getHRP() if hrp then hrp.AssemblyLinearVelocity=Vector3.zero end end
+end)
+track(RunService.RenderStepped:Connect(function()
+    if not platOn then return end
+    local hrp,h=getHRP() if not hrp then return end
+    if not (platBV and platBV.Parent) then platBV=newPlatBV(hrp) end
+    local sp=(h and h.WalkSpeed) or 16
+    local cam=Workspace.CurrentCamera
+    local look=cam.CFrame.LookVector look=Vector3.new(look.X,0,look.Z) if look.Magnitude>0 then look=look.Unit end
+    local right=cam.CFrame.RightVector right=Vector3.new(right.X,0,right.Z) if right.Magnitude>0 then right=right.Unit end
+    local mv=Vector3.zero
+    if UIS:IsKeyDown(Enum.KeyCode.W) then mv+=look end
+    if UIS:IsKeyDown(Enum.KeyCode.S) then mv-=look end
+    if UIS:IsKeyDown(Enum.KeyCode.A) then mv-=right end
+    if UIS:IsKeyDown(Enum.KeyCode.D) then mv+=right end
+    if mv.Magnitude>0 then mv=mv.Unit*sp end
+    local vy=0 if UIS:IsKeyDown(Enum.KeyCode.E) then vy=sp end if UIS:IsKeyDown(Enum.KeyCode.Q) then vy=-sp end
+    platBV.Velocity=Vector3.new(mv.X,vy,mv.Z)
+end))
+sldr(mvc,"Fly speed",10,300,50,function(v) flySpeed=v end)
+sldr(mvc,"Walk speed",16,350,16,function(v) local _,h=getHRP() if h then h.WalkSpeed=v end end)
+sldr(mvc,"Jump power",50,500,50,function(v) local _,h=getHRP() if h then h.UseJumpPower=true; h.JumpPower=v end end)
+local cbt=card(c2,"Combat")
+local antiFling=false
+pill(cbt,"Anti-fling",false,function(v) antiFling=v end)
+track(RunService.Stepped:Connect(function() if antiFling then local hrp=getHRP() if hrp then hrp.AssemblyAngularVelocity=Vector3.zero if hrp.AssemblyLinearVelocity.Magnitude>180 then hrp.AssemblyLinearVelocity=Vector3.zero end end end end))
+local spin=false
+pill(cbt,"Fling (spin)",false,function(v) spin=v end)
+track(RunService.Heartbeat:Connect(function() if spin then local hrp=getHRP() if hrp then hrp.CFrame=hrp.CFrame*CFrame.Angles(0,math.rad(40),0) end end end))
+local antiafkConn=nil
+pill(cbt,"Anti-AFK",false,function(v)
+    if v then local vu=game:GetService("VirtualUser") antiafkConn=track(LP.Idled:Connect(function() vu:CaptureController() vu:ClickButton2(Vector2.new()) end))
+    elseif antiafkConn then antiafkConn:Disconnect() antiafkConn=nil end
+end)
+local wcd=card(c2,"World")
+local frozenParts={}
+local function isTowerPart(p) return p:IsA("BasePart") and (p.Name=="JengaPart" or p:FindFirstAncestor("Tower")~=nil) end
+pill(wcd,"Freeze All (Tower/Jenga)",false,function(v)
+    if v then
+        frozenParts={}
+        for _,p in ipairs(Workspace:GetDescendants()) do
+            if not p.Anchored and isTowerPart(p) then p.Anchored=true table.insert(frozenParts,p) end
+        end
+    else
+        for _,p in ipairs(frozenParts) do if p and p.Parent then p.Anchored=false end end
+        frozenParts={}
+    end
+end)
+
+-- ================= COLUMN 3: VISUALS + TOOLS =================
+local c3=newCol()
+local visc=card(c3,"Visuals")
+local ESP={on=false, box=true, name=true, tracer=false, hp=true, team=false, maxd=1000}
+local espF=make("Folder",{Name="__ESP"},parentGui) STATE.esp=espF
+local espO={}
+local function mkESP(plr)
+    local o={}
+    o.hl=make("Highlight",{FillTransparency=0.75, OutlineColor=Color3.fromRGB(120,180,255), FillColor=Color3.fromRGB(90,140,255), Enabled=false},espF)
+    o.bb=make("BillboardGui",{Size=UDim2.fromOffset(120,34), StudsOffset=Vector3.new(0,2.6,0), AlwaysOnTop=true, Enabled=false},espF)
+    o.nm=make("TextLabel",{Size=UDim2.new(1,0,0,16), BackgroundTransparency=1, Font=Enum.Font.GothamBold, TextSize=13, TextColor3=WHITE, TextStrokeTransparency=0.35},o.bb)
+    o.hpbg=make("Frame",{Size=UDim2.new(0,80,0,4), Position=UDim2.new(0.5,-40,0,18), BackgroundColor3=Color3.fromRGB(0,0,0), BorderSizePixel=0},o.bb)
+    make("UICorner",{CornerRadius=UDim.new(1,0)},o.hpbg)
+    o.hpf=make("Frame",{Size=UDim2.new(1,0,1,0), BackgroundColor3=Color3.fromRGB(80,220,90), BorderSizePixel=0},o.hpbg)
+    make("UICorner",{CornerRadius=UDim.new(1,0)},o.hpf)
+    if Drawing then o.tr=Drawing.new("Line") o.tr.Thickness=1 o.tr.Color=Color3.fromRGB(120,180,255) o.tr.Visible=false table.insert(STATE.draw,o.tr) end
+    espO[plr]=o return o
+end
+pill(visc,"ESP enabled",false,function(v) ESP.on=v end)
+pill(visc,"Boxes",true,function(v) ESP.box=v end)
+pill(visc,"Names + distance",true,function(v) ESP.name=v end)
+pill(visc,"Tracers",false,function(v) ESP.tracer=v end)
+pill(visc,"Health bars",true,function(v) ESP.hp=v end)
+pill(visc,"Team check",false,function(v) ESP.team=v end)
+sldr(visc,"ESP max distance",100,5000,1000,function(v) ESP.maxd=v end)
+local fbSaved=nil
+pill(visc,"Fullbright",false,function(v)
+    if v then fbSaved={Lighting.Brightness,Lighting.ClockTime,Lighting.Ambient,Lighting.OutdoorAmbient}
+        Lighting.Brightness=2 Lighting.ClockTime=14 Lighting.Ambient=Color3.fromRGB(180,180,180) Lighting.OutdoorAmbient=Color3.fromRGB(180,180,180)
+    elseif fbSaved then Lighting.Brightness,Lighting.ClockTime,Lighting.Ambient,Lighting.OutdoorAmbient=fbSaved[1],fbSaved[2],fbSaved[3],fbSaved[4] end
+end)
+local fogSaved=nil
+pill(visc,"No fog",false,function(v)
+    if v then fogSaved={Lighting.FogEnd,Lighting.FogStart} Lighting.FogEnd=1e6 Lighting.FogStart=1e6
+    elseif fogSaved then Lighting.FogEnd,Lighting.FogStart=fogSaved[1],fogSaved[2] end
+end)
+local crossOn=false
+pill(visc,"Crosshair",false,function(v) crossOn=v cross.Visible=v end)
+track(RunService.RenderStepped:Connect(function()
+    local cam=Workspace.CurrentCamera
+    for _,plr in ipairs(Players:GetPlayers()) do
+        if plr~=LP then
+            local o=espO[plr] or mkESP(plr)
+            local ch=plr.Character
+            local hrp=ch and ch:FindFirstChild("HumanoidRootPart")
+            local hum=ch and ch:FindFirstChildOfClass("Humanoid")
+            local dist=hrp and (cam.CFrame.Position-hrp.Position).Magnitude or 1e9
+            local show=ESP.on and hrp and hum and hum.Health>0 and dist<=ESP.maxd and not (ESP.team and plr.Team==LP.Team)
+            if show then
+                o.hl.Adornee=ESP.box and ch or nil o.hl.Enabled=ESP.box
+                local head=ch:FindFirstChild("Head") or hrp
+                o.bb.Adornee=(ESP.name or ESP.hp) and head or nil o.bb.Enabled=(ESP.name or ESP.hp)
+                o.nm.Visible=ESP.name
+                if ESP.name then o.nm.Text=plr.Name.."  ["..math.floor(dist).."]" end
+                o.hpbg.Visible=ESP.hp
+                if ESP.hp then local r=math.clamp(hum.Health/hum.MaxHealth,0,1) o.hpf.Size=UDim2.fromScale(r,1) o.hpf.BackgroundColor3=Color3.fromRGB(math.floor(220*(1-r)),math.floor(200*r+40),70) end
+                if o.tr then if ESP.tracer then local sp,on=cam:WorldToViewportPoint(hrp.Position) if on then o.tr.Visible=true o.tr.From=Vector2.new(cam.ViewportSize.X/2,cam.ViewportSize.Y) o.tr.To=Vector2.new(sp.X,sp.Y) else o.tr.Visible=false end else o.tr.Visible=false end end
+            else o.hl.Enabled=false o.bb.Enabled=false if o.tr then o.tr.Visible=false end end
         end
     end
 end))
-slider(tr,"Push Force",30,250,80,function(v) pushForce=v end)
-
---=====================================================================
--- 4: TELEPORT
---=====================================================================
-local tp = newPage("Teleport")
-label(tp,"POSITION")
-local saved=nil
-button(tp,"Save Position", function() local hrp=getHRP(); if hrp then saved=hrp.CFrame end end)
-button(tp,"Load Position", function() local hrp=getHRP(); if hrp and saved then hrp.CFrame=saved end end)
-button(tp,"Teleport To Spawn", function()
-    local hrp=getHRP(); local sp=Workspace:FindFirstChildWhichIsA("SpawnLocation",true)
-    if hrp and sp then hrp.CFrame=sp.CFrame+Vector3.new(0,4,0) end
-end)
-button(tp,"Teleport Forward (camera)", function()
-    local hrp=getHRP(); local cam=Workspace.CurrentCamera
-    if hrp then hrp.CFrame=CFrame.new(cam.CFrame.Position+cam.CFrame.LookVector*40) end
+track(Players.PlayerRemoving:Connect(function(plr) local o=espO[plr] if o then pcall(function() o.hl:Destroy() end) pcall(function() o.bb:Destroy() end) if o.tr then pcall(function() o.tr:Remove() end) end espO[plr]=nil end end))
+local tlc=card(c3,"Tools")
+listbtn(tlc,"Infinite Yield",function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end)
+listbtn(tlc,"Dex Explorer",function() loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))() end)
+listbtn(tlc,"Simple Spy",function() loadstring(game:HttpGet("https://raw.githubusercontent.com/exxtremestuffs/SimpleSpySource/master/SimpleSpy.lua"))() end)
+listbtn(tlc,"Hydroxide",function()
+    local u="https://raw.githubusercontent.com/Upbolt/Hydroxide/revision/"
+    local function imp(p) return loadstring(game:HttpGet(u..p..".lua"),p..".lua")() end
+    imp("init") imp("ui/main")
 end)
 
---=====================================================================
--- 5: MISC
---=====================================================================
-local ms = newPage("Misc")
-label(ms,"UTILITY")
-local fb=nil
-toggle(ms,"Fullbright", function(on)
-    if on then
-        fb={Lighting.Brightness,Lighting.ClockTime,Lighting.FogEnd,Lighting.Ambient}
-        Lighting.Brightness=2; Lighting.ClockTime=14; Lighting.FogEnd=1e6; Lighting.Ambient=Color3.fromRGB(180,180,180)
-    elseif fb then Lighting.Brightness,Lighting.ClockTime,Lighting.FogEnd,Lighting.Ambient=fb[1],fb[2],fb[3],fb[4] end
-end)
-local antiafk=nil
-toggle(ms,"Anti-AFK", function(on)
-    if on then
-        local vu=game:GetService("VirtualUser")
-        antiafk=track(LocalPlayer.Idled:Connect(function() vu:CaptureController(); vu:ClickButton2(Vector2.new()) end))
-    elseif antiafk then antiafk:Disconnect() end
-end)
-button(ms,"Reset Character", function() local _,hum=getHRP(); if hum then hum.Health=0 end end)
-button(ms,"Rejoin Server", function() game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer) end)
-label(ms,"Made for "..LocalPlayer.Name)
-
---=====================================================================
--- 7: SCRIPTS  (script hub + remote spy)
---=====================================================================
-local sc = newPage("Scripts")
-label(sc,"SCRIPT HUB")
-button(sc,"Load Infinite Yield", function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
-end)
-
-label(sc,"REMOTE SPY")
--- Loads SimpleSpy (full remote spy GUI) just like the IY loader above.
-button(sc,"Load Remote Spy", function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/exxtremestuffs/SimpleSpySource/master/SimpleSpy.lua"))()
-end)
-
-label(sc,"SCRIPT SEARCH")
--- Search ScriptBlox by game name; each result has an Execute button that runs the script.
-local HttpService = game:GetService("HttpService")
-local searchRow = make("Frame",{Size=UDim2.new(1,0,0,32), BackgroundColor3=BG, BorderSizePixel=0}, sc)
-make("UICorner",{CornerRadius=UDim.new(0,6)},searchRow)
-local box = make("TextBox",{Size=UDim2.new(1,-72,1,-6), Position=UDim2.fromOffset(6,3), BackgroundColor3=BG2,
-    Text="", PlaceholderText="search a game…", TextColor3=TXT, PlaceholderColor3=SUB, ClearTextOnFocus=false,
-    Font=Enum.Font.GothamMedium, TextSize=13, TextXAlignment=Enum.TextXAlignment.Left}, searchRow)
-make("UICorner",{CornerRadius=UDim.new(0,5)},box)
-make("UIPadding",{PaddingLeft=UDim.new(0,8)},box)
-local searchBtn = make("TextButton",{Size=UDim2.fromOffset(60,26), Position=UDim2.new(1,-64,0.5,-13),
-    BackgroundColor3=ACCENT, Text="Search", TextColor3=TXT, Font=Enum.Font.GothamMedium, TextSize=12, AutoButtonColor=true}, searchRow)
-make("UICorner",{CornerRadius=UDim.new(0,5)},searchBtn)
-local resFrame = make("Frame",{Size=UDim2.new(1,0,0,190), BackgroundColor3=BG, BorderSizePixel=0}, sc)
-make("UICorner",{CornerRadius=UDim.new(0,6)},resFrame)
-local resScroll = make("ScrollingFrame",{Size=UDim2.new(1,-8,1,-8), Position=UDim2.fromOffset(4,4),
-    BackgroundTransparency=1, BorderSizePixel=0, ScrollBarThickness=4, CanvasSize=UDim2.new(),
-    AutomaticCanvasSize=Enum.AutomaticSize.Y, ScrollBarImageColor3=ACCENT}, resFrame)
-make("UIListLayout",{Padding=UDim.new(0,4), SortOrder=Enum.SortOrder.LayoutOrder},resScroll)
-local function clearRes() for _,c in ipairs(resScroll:GetChildren()) do if not c:IsA("UIListLayout") then c:Destroy() end end end
-local function status(t) clearRes(); make("TextLabel",{Size=UDim2.new(1,0,0,20), BackgroundTransparency=1, Text=t,
-    TextColor3=SUB, Font=Enum.Font.Gotham, TextSize=12, TextXAlignment=Enum.TextXAlignment.Left}, resScroll) end
-local function runCode(code)
-    if type(code)~="string" or #code==0 then return false end
-    local fn = loadstring(code); if not fn then return false end
-    task.spawn(fn); return true
+-- ================= COLUMN 4: PLAYERS + UTILITY =================
+local c4=newCol()
+local plc=card(c4,"Players")
+local listF=make("Frame",{Size=UDim2.new(1,0,0,168), BackgroundColor3=PANEL, BorderSizePixel=0},plc)
+make("UICorner",{CornerRadius=UDim.new(0,7)},listF)
+local listS=make("ScrollingFrame",{Size=UDim2.new(1,-6,1,-6), Position=UDim2.fromOffset(3,3), BackgroundTransparency=1, BorderSizePixel=0, ScrollBarThickness=3, CanvasSize=UDim2.new(), AutomaticCanvasSize=Enum.AutomaticSize.Y, ScrollBarImageColor3=ROW},listF)
+make("UIListLayout",{Padding=UDim.new(0,3), SortOrder=Enum.SortOrder.Name},listS)
+local function refreshP()
+    for _,c in ipairs(listS:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+    for _,plr in ipairs(Players:GetPlayers()) do if plr~=LP then
+        local r=make("TextButton",{Name=plr.Name, Size=UDim2.new(1,0,0,26), BackgroundColor3=ROW, Text="  "..plr.DisplayName, TextColor3=TXT, Font=Enum.Font.GothamMedium, TextSize=12, TextXAlignment=Enum.TextXAlignment.Left, AutoButtonColor=true},listS)
+        make("UICorner",{CornerRadius=UDim.new(0,6)},r)
+        r.MouseButton1Click:Connect(function() local hrp=getHRP() local t=plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") if hrp and t then hrp.CFrame=t.CFrame+Vector3.new(0,3,0) end end)
+    end end
 end
-local searching=false
-local function doSearch()
-    local q=box.Text
-    if #q==0 or searching then return end
-    searching=true; status("Searching…")
-    task.spawn(function()
-        local url="https://scriptblox.com/api/script/search?q="..HttpService:UrlEncode(q)  -- no mode filter = any script
-        local ok,body=pcall(function() return game:HttpGet(url) end)
-        local ok2,data = ok and pcall(function() return HttpService:JSONDecode(body) end)
-        local list = ok2 and data and data.result and data.result.scripts
-        if not list then status("Request failed / no results"); searching=false; return end
-        if #list==0 then status("No scripts found for '"..q.."'"); searching=false; return end
-        clearRes()
-        for i=1,math.min(#list,25) do
-            local s=list[i]
-            local code=s.script
-            local slug=s.slug
-            local verified=s.verified
-            local row=make("Frame",{Size=UDim2.new(1,-4,0,44), BackgroundColor3=BG2, BorderSizePixel=0, LayoutOrder=i}, resScroll)
-            make("UICorner",{CornerRadius=UDim.new(0,5)},row)
-            make("TextLabel",{Size=UDim2.new(1,-74,1,-6), Position=UDim2.fromOffset(8,3), BackgroundTransparency=1,
-                RichText=true, TextColor3=TXT, Font=Enum.Font.GothamMedium, TextSize=12,
-                Text=(verified and "<font color='#46c878'>✔ </font>" or "")..tostring(s.title or "Untitled").."\n<font color='#8a8a99'>"..tostring((s.game and s.game.name) or "?").."</font>",
-                TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Center,
-                TextTruncate=Enum.TextTruncate.AtEnd}, row)
-            local ex=make("TextButton",{Size=UDim2.fromOffset(60,28), Position=UDim2.new(1,-66,0.5,-14),
-                BackgroundColor3=ACCENT, Text="Execute", TextColor3=TXT, Font=Enum.Font.GothamMedium, TextSize=11, AutoButtonColor=true}, row)
-            make("UICorner",{CornerRadius=UDim.new(0,5)},ex)
-            ex.MouseButton1Click:Connect(function()
-                local c=code
-                if (type(c)~="string" or #c==0) and slug then
-                    local ok3,b2=pcall(function() return game:HttpGet("https://scriptblox.com/api/script/"..slug) end)
-                    if ok3 then local ok4,d2=pcall(function() return HttpService:JSONDecode(b2) end)
-                        if ok4 and d2 and d2.script then c=(type(d2.script)=="table" and d2.script.script) or d2.script end end
-                end
-                ex.Text = runCode(c) and "Ran" or "Failed"
-                task.delay(1.2,function() if ex and ex.Parent then ex.Text="Execute" end end)
-            end)
+listbtn(plc,"Refresh players",refreshP)
+refreshP()
+track(Players.PlayerAdded:Connect(refreshP))
+track(Players.PlayerRemoving:Connect(function() task.defer(refreshP) end))
+local specOn,specIdx=false,1
+local specBtn
+pill(plc,"Spectate",false,function(v)
+    specOn=v local cam=Workspace.CurrentCamera
+    if not v then local h=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") if h then cam.CameraSubject=h end end
+end)
+local function applySpec()
+    local others={} for _,p in ipairs(Players:GetPlayers()) do if p~=LP then table.insert(others,p) end end
+    if #others==0 then return end
+    specIdx=((specIdx-1)%#others)+1
+    local p=others[specIdx]
+    local h=p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+    if h then Workspace.CurrentCamera.CameraSubject=h end
+    if specBtn then specBtn.Text="  Next › "..p.Name end
+end
+specBtn=listbtn(plc,"Next player",function() if specOn then specIdx=specIdx+1 applySpec() end end)
+local utl=card(c4,"Utility")
+local savedPos=nil
+listbtn(utl,"Save position",function() local hrp=getHRP() if hrp then savedPos=hrp.CFrame end end)
+listbtn(utl,"Load position",function() local hrp=getHRP() if hrp and savedPos then hrp.CFrame=savedPos end end)
+listbtn(utl,"Teleport to Spawn",function() local hrp=getHRP() local s=Workspace:FindFirstChildWhichIsA("SpawnLocation",true) if hrp and s then hrp.CFrame=s.CFrame+Vector3.new(0,4,0) end end)
+listbtn(utl,"Reset Character",function() local _,h=getHRP() if h then h.Health=0 end end)
+listbtn(utl,"Server Hop",function()
+    local ok,body=pcall(function() return game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100") end)
+    if not ok then return end
+    local ok2,data=pcall(function() return HttpService:JSONDecode(body) end)
+    if not ok2 or not data.data then return end
+    for _,s in ipairs(data.data) do
+        if s.id~=game.JobId and s.playing and s.maxPlayers and s.playing<s.maxPlayers then
+            pcall(function() TP:TeleportToPlaceInstance(game.PlaceId, s.id, LP) end) return
         end
-        searching=false
-    end)
-end
-searchBtn.MouseButton1Click:Connect(doSearch)
-box.FocusLost:Connect(function(enter) if enter then doSearch() end end)
+    end
+end)
+listbtn(utl,"Copy Job ID",function() local f=(setclipboard or toclipboard or (syn and syn.write_clipboard)) if f then pcall(f, game.JobId) end end)
+listbtn(utl,"Rejoin Server",function() TP:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
 
--- ---- open first tab & respawn handling ------------------------------
-tabBtns["Movement"].BackgroundColor3=ACCENT
-tabBtns["Movement"].TextColor3=TXT
-pages["Movement"].Visible=true
-track(LocalPlayer.CharacterAdded:Connect(function() flying=false; flyBV=nil; flyBG=nil end))
-print("[AdminPanel] loaded")
+track(LP.CharacterAdded:Connect(function() flying=false flyBV=nil flyBG=nil platOn=false platBV=nil end))
+print("[Panel] HYPERION loaded (expanded)")
