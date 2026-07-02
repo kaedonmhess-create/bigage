@@ -210,7 +210,14 @@ track(RunService.RenderStepped:Connect(function()
     elseif flying then startFly() end
 end))
 local noclip=false
-pill(mvc,"Noclip",false,function(v) noclip=v end)
+pill(mvc,"Noclip",false,function(v)
+    noclip=v
+    if not v and LP.Character then                       -- restore collisions when turned off
+        for _,p in ipairs(LP.Character:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide=(p.Name~="HumanoidRootPart") end
+        end
+    end
+end)
 track(RunService.Stepped:Connect(function() if noclip and LP.Character then for _,p in ipairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") and p.CanCollide then p.CanCollide=false end end end end))
 local infJump=false
 pill(mvc,"Infinite jump",false,function(v) infJump=v end)
@@ -395,5 +402,6 @@ end)
 listbtn(utl,"Copy Job ID",function() local f=(setclipboard or toclipboard or (syn and syn.write_clipboard)) if f then pcall(f, game.JobId) end end)
 listbtn(utl,"Rejoin Server",function() TP:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
 
-track(LP.CharacterAdded:Connect(function() flying=false flyBV=nil flyBG=nil platOn=false platBV=nil end))
+-- keep Fly / Platform toggled ON through respawn; just clear the stale movers so the loops rebuild them
+track(LP.CharacterAdded:Connect(function() flyBV=nil flyBG=nil platBV=nil end))
 print("[Panel] HYPERION loaded (expanded)")
